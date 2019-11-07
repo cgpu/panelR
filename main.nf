@@ -76,39 +76,36 @@ ch_pops_vcfs_to_inspect
                         .view()
 
 
-// process GatherVcfs {
-//
-//     tag "${pop_name}"
-//     publishDir "${params.outdir}/subsampled_multisample_vcf/${sample_list.simpleName}", mode: 'copy'
-//     container 'broadinstitute/gatk:latest'
-//
-//     input:
-//     set val(pop_name), file ('*vcf') from ch_pops_vcfs
-//     each file(fasta) from ch_fasta_gather
-//     each file(fai) from ch_fai_gather
-//     each file(dict) from ch_dict_gather
-//
-//     output:
-//     file("*") into ch_complete_chr_vcf
-//
-//
-//     script:
-//     """
-//     ## make list of input variant files
-//     for vcf in \$(ls *vcf); do
-//     echo \$vcf >> input_variant_files.list
-//     done
-//
-//     gatk GatherVcfs \
-//     --INPUT input_variant_files.list \
-//     --OUTPUT ${pop_name}.vcf
-//
-//     gatk --java-options "-Xmx${task.memory.toGiga()}g"  \
-//     GatherVcfs \
-//     -I ${params.cohort_id}.vcf.list \
-//     -O ${params.cohort_id}.recal-SNP.recal-INDEL.vcf.gz # GatherVCF does not index the VCF. The VCF will be indexed in the next tabix operation.
-//
-//     tabix -p vcf ${params.cohort_id}.recal-SNP.recal-INDEL.vcf.gz
-//     """
-//     }
+process GatherVcfs {
 
+    tag "${pop_name}"
+    publishDir "${params.outdir}/subsampled_multisample_vcf/${sample_list.simpleName}/concatenated/", mode: 'copy'
+    container 'broadinstitute/gatk:latest'
+
+    input:
+    set val(pop_name), file ('*vcf') from ch_pops_vcfs
+    each file(fasta) from ch_fasta_gather
+    each file(fai) from ch_fai_gather
+    each file(dict) from ch_dict_gather
+
+    output:
+    file("*") into ch_complete_chr_vcf
+
+
+    script:
+    """
+    ## make list of input variant files
+    for vcf in \$(ls *vcf); do
+    echo \$vcf >> ${pop_name}.vcf.list
+    done
+
+    gatk GatherVcfs \
+    --INPUT input_variant_files.list \
+    --OUTPUT ${pop_name}.vcf
+
+    gatk --java-options "-Xmx${task.memory.toGiga()}g"  \
+    GatherVcfs \
+    -I ${pop_name}.vcf.list \
+    -O ${pop_name}.vcf # GatherVCF does not index the VCF. The VCF will be indexed in the next tabix operation.
+    """
+    }
