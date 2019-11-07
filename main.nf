@@ -100,11 +100,7 @@ process GatherVcfs {
     done
 
     gatk GatherVcfs \
-    --INPUT input_variant_files.list \
+    --INPUT  ${pop_name}.vcf.list \
     --OUTPUT ${pop_name}.vcf
-
-    gatk GatherVcfs \
-    -I ${pop_name}.vcf.list \
-    -O ${pop_name}.vcf # GatherVCF does not index the VCF. The VCF will be indexed in the next tabix operation.
     """
     }
