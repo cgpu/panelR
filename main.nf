@@ -23,9 +23,11 @@ Channel.fromPath(params.dict)
         .ifEmpty { exit 1, "dict annotation file not found: ${params.dict}" }
         .into { ch_dict ; ch_dict_gather }
 
-// ch_reference        = ch_fasta.combine(ch_fai)
-// ch_reference_bundle = ch_reference.combine(ch_dict)
-// ch_reference_bundle.view()
+// Create ch with [fasta, fai, dict]
+ch_reference        = ch_fasta.combine(ch_fai)
+ch_reference_bundle = ch_reference.combine(ch_dict)
+ch_reference_bundle_to_use.into { ch_reference_bundle ; ch_reference_bundle_to_inspect}
+ch_reference_bundle_to_inspect.view()
 
 Channel.fromPath(params.multiVCF_table)
        .ifEmpty { exit 1, "File with vcf and respective index not found or not passed to --multiVCF_table" }
@@ -42,15 +44,13 @@ ch_multiVCF = ch_subset_lists_view.combine(ch_multiVCF_table)
 
 process chop_multiVCF {
 
-    tag "${sample_list.simpleName}"
+    tag {"${sample_list.simpleName}-${vcf.baseName}"}
     container 'broadinstitute/gatk:latest'
     publishDir "${params.outdir}/subsampled_multisample_vcf/${sample_list.simpleName}", mode: 'copy'
 
     input:
     set file(sample_list), file(vcf), file(vcf_index) from ch_multiVCF
-    each file(fasta) from ch_fasta
-    each file(fai) from ch_fai
-    each file(dict) from ch_dict
+    each (file(fasta), file(fai) file(dict)) from ch_reference_bundle
 
     output:
     file("*") into ch_nowhere
@@ -62,7 +62,8 @@ process chop_multiVCF {
     -R ${fasta} \
     -V $vcf \
     -O ${vcf.baseName}.${sample_list.simpleName}.vcf \
-    --sample-name ${sample_list} \
+    --sample-name ${sample_list}  \
+   --java-options '-DGATK_STACKTRACE_ON_USER_EXCEPTION=true'
    """
 }
 
@@ -73,29 +74,38 @@ ch_pops_vcfs_to_inspect
 
 
 // process GatherVcfs {
-
+//
 //     tag "${pop_name}"
 //     publishDir "${params.outdir}/subsampled_multisample_vcf/${sample_list.simpleName}", mode: 'copy'
 //     container 'broadinstitute/gatk:latest'
-
+//
 //     input:
 //     set val(pop_name), file ('*vcf') from ch_pops_vcfs
 //     each file(fasta) from ch_fasta_gather
 //     each file(fai) from ch_fai_gather
 //     each file(dict) from ch_dict_gather
-
+//
 //     output:
 //     file("*") into ch_complete_chr_vcf
-
-
+//
+//
 //     script:
 //     """
 //     ## make list of input variant files
 //     for vcf in \$(ls *vcf); do
 //     echo \$vcf >> input_variant_files.list
 //     done
+//
 //     gatk GatherVcfs \
-//     --INPUT= input_variant_files.list \
-//     --OUTPUT= ${pop_name}.vcf
+//     --INPUT input_variant_files.list \
+//     --OUTPUT ${pop_name}.vcf
+//
+//     gatk --java-options "-Xmx${task.memory.toGiga()}g"  \
+//     GatherVcfs \
+//     -I ${params.cohort_id}.vcf.list \
+//     -O ${params.cohort_id}.recal-SNP.recal-INDEL.vcf.gz # GatherVCF does not index the VCF. The VCF will be indexed in the next tabix operation.
+//
+//     tabix -p vcf ${params.cohort_id}.recal-SNP.recal-INDEL.vcf.gz 
 //     """
 //     }
+
