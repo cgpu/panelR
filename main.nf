@@ -47,7 +47,7 @@ process SubsetMultiVCF {
 
     tag {"${sample_list.simpleName}-${vcf.baseName}"}
     container 'broadinstitute/gatk:latest'
-    publishDir "${params.outdir}/subsampled_multisample_vcf/${sample_list.simpleName}", mode: 'copy'
+    publishDir "${params.outdir}/${sample_list.simpleName}/individual_chr_vcfs/", mode: 'copy'
 
     input:
     set file(sample_list), file(vcf), file(vcf_index) from ch_multiVCF
@@ -56,8 +56,7 @@ process SubsetMultiVCF {
     each file(dict) from ch_dict
 
     output:
-    file("*") into ch_nowhere
-    set val("${sample_list.simpleName}"), file("${vcf.baseName}.${sample_list.simpleName}.vcf") into (ch_pops_vcfs, ch_pops_vcfs_to_inspect)
+    set val("${sample_list.simpleName}"), file("${vcf.baseName}.${sample_list.simpleName}.vcf.gz") into (ch_pops_vcfs, ch_pops_vcfs_to_inspect)
 
     script:
     """
@@ -66,7 +65,9 @@ process SubsetMultiVCF {
     -V $vcf \
     -O ${vcf.baseName}.${sample_list.simpleName}.vcf \
     --sample-name ${sample_list}  \
-   --java-options '-DGATK_STACKTRACE_ON_USER_EXCEPTION=true'
+    --java-options '-DGATK_STACKTRACE_ON_USER_EXCEPTION=true'
+
+    bgzip -c ${vcf.baseName}.${sample_list.simpleName}.vcf > ${vcf.baseName}.${sample_list.simpleName}.vcf.gz
    """
 }
 
@@ -75,32 +76,68 @@ ch_pops_vcfs_to_inspect
                         //.map {pop_name, subsetted_vcf -> subsetted_vcf}
                         .view()
 
+ch_grouped_pop_vcfs = ch_pops_vcfs.groupTuple(by: 0)
+
 
 process GatherVcfs {
 
     tag "${pop_name}"
-    publishDir "${params.outdir}/subsampled_multisample_vcf/${sample_list.simpleName}/concatenated/", mode: 'copy'
+    publishDir "${params.outdir}/${pop_name}/subsampled_multisample_vcf/", mode: 'copy'
     container 'broadinstitute/gatk:latest'
 
     input:
-    set val(pop_name), file ('*vcf') from ch_pops_vcfs
+    set val(pop_name), file (vcf_bundle) from ch_grouped_pop_vcfs
     each file(fasta) from ch_fasta_gather
     each file(fai) from ch_fai_gather
     each file(dict) from ch_dict_gather
 
     output:
     file("*") into ch_complete_chr_vcf
+    set val("${pop_name}"), file("${pop_name}.vcf.gz") into (ch_plink_count_freqs, ch_plink_count_freqs_to_inspect)
 
 
     script:
     """
+    ls *.vcf.gz | while read vcf; do tabix -fp vcf \$vcf; done
+
     ## make list of input variant files
-    for vcf in \$(ls *vcf); do
+    for vcf in \$(ls *vcf.gz); do
     echo \$vcf >> ${pop_name}.vcf.list
     done
 
     gatk GatherVcfs \
     --INPUT  ${pop_name}.vcf.list \
-    --OUTPUT ${pop_name}.vcf
+    --OUTPUT ${pop_name}.vcf.gz
+    """
+    }
+
+ch_plink_count_freqs_to_inspect.view()
+
+process PlinkFilterAndFreqCount {
+
+    tag "${pop_name}"
+    publishDir "${params.outdir}/${pop_name}/plink_metrics/", mode: 'copy'
+    container 'alliecreason/plink:1.90'
+
+    input:
+    set val(pop_name), file(all_chr_vcf) from ch_plink_count_freqs
+
+    output:
+    file("*") into ch_plink_results
+    file("${pop_name}.frq.counts") into ch_plink_frq_counts
+
+
+    script:
+    """
+    plink \
+    --vcf $all_chr_vcf \
+    --snps-only \
+    --biallelic-only strict list \
+    --geno 0.05 \
+    --maf  0.05 \
+    --freq counts \
+    --out $pop_name > ${pop_name}_plink.stdout.log
+
+    rm *.vcf.gz
     """
     }
