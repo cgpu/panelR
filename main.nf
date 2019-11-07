@@ -105,7 +105,7 @@ ch_pops_vcfs_to_inspect
 //     -I ${params.cohort_id}.vcf.list \
 //     -O ${params.cohort_id}.recal-SNP.recal-INDEL.vcf.gz # GatherVCF does not index the VCF. The VCF will be indexed in the next tabix operation.
 //
-//     tabix -p vcf ${params.cohort_id}.recal-SNP.recal-INDEL.vcf.gz 
+//     tabix -p vcf ${params.cohort_id}.recal-SNP.recal-INDEL.vcf.gz
 //     """
 //     }
 
