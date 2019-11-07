@@ -23,11 +23,12 @@ Channel.fromPath(params.dict)
         .ifEmpty { exit 1, "dict annotation file not found: ${params.dict}" }
         .into { ch_dict ; ch_dict_gather }
 
+// TODO: Multiply channel arrays by N = number of vcf files (most likely 22, from autosomal chr count)
 // Create ch with [fasta, fai, dict]
-ch_reference        = ch_fasta.combine(ch_fai)
-ch_reference_bundle = ch_reference.combine(ch_dict)
-ch_reference_bundle_to_use.into { ch_reference_bundle ; ch_reference_bundle_to_inspect}
-ch_reference_bundle_to_inspect.view()
+// ch_reference        = ch_fasta.combine(ch_fai)
+// ch_reference_bundle = ch_reference.combine(ch_dict)
+// ch_reference_bundle_to_use.into { ch_reference_bundle ; ch_reference_bundle_to_inspect}
+// ch_reference_bundle_to_inspect.view()
 
 Channel.fromPath(params.multiVCF_table)
        .ifEmpty { exit 1, "File with vcf and respective index not found or not passed to --multiVCF_table" }
@@ -50,7 +51,9 @@ process chop_multiVCF {
 
     input:
     set file(sample_list), file(vcf), file(vcf_index) from ch_multiVCF
-    each (file(fasta), file(fai) file(dict)) from ch_reference_bundle
+    each file(fasta) from ch_fasta
+    each file(fai) from ch_fai
+    each file(dict) from ch_dict
 
     output:
     file("*") into ch_nowhere
