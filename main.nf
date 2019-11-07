@@ -43,7 +43,7 @@ Channel.fromPath("${params.list_folder}/*.list")
 // Create ch with [pop.list, vcf, vcf_index]
 ch_multiVCF = ch_subset_lists_view.combine(ch_multiVCF_table)
 
-process chop_multiVCF {
+process SubsetMultiVCF {
 
     tag {"${sample_list.simpleName}-${vcf.baseName}"}
     container 'broadinstitute/gatk:latest'
@@ -103,8 +103,7 @@ process GatherVcfs {
     --INPUT input_variant_files.list \
     --OUTPUT ${pop_name}.vcf
 
-    gatk --java-options "-Xmx${task.memory.toGiga()}g"  \
-    GatherVcfs \
+    gatk GatherVcfs \
     -I ${pop_name}.vcf.list \
     -O ${pop_name}.vcf # GatherVCF does not index the VCF. The VCF will be indexed in the next tabix operation.
     """
