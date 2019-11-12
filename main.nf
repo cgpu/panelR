@@ -48,6 +48,7 @@ process SubsetMultiVCF {
     tag {"${sample_list.simpleName}-${vcf.baseName}"}
     container 'broadinstitute/gatk:4.1.3.0'
     publishDir "${params.outdir}/populations/${sample_list.simpleName}/individual_chr_vcfs/", mode: 'copy'
+    echo true 
 
     input:
     set file(sample_list), file(vcf), file(vcf_index) from ch_multiVCF
@@ -67,7 +68,7 @@ process SubsetMultiVCF {
     --sample-name ${sample_list}  \
     --restrict-alleles-to BIALLELIC \
     --select-type-to-include SNP \
-    --verbosity ERROR > stderr.txt
+    --verbosity ERROR 2> stderr.txt
 
     # Recode ID to: chr:pos:ref:alt
     #bcftools annotate -x ID iberian.vcf | bcftools annotate --set-id +'%CHROM:%POS:%REF:%FIRST_ALT' > ${vcf.baseName}.${sample_list.simpleName}.vcf
