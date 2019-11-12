@@ -47,7 +47,7 @@ process SubsetMultiVCF {
 
     tag {"${sample_list.simpleName}-${vcf.baseName}"}
     container 'broadinstitute/gatk:latest'
-    publishDir "${params.outdir}/${sample_list.simpleName}/individual_chr_vcfs/", mode: 'copy'
+    publishDir "${params.outdir}/populations/${sample_list.simpleName}/individual_chr_vcfs/", mode: 'copy'
 
     input:
     set file(sample_list), file(vcf), file(vcf_index) from ch_multiVCF
@@ -65,6 +65,8 @@ process SubsetMultiVCF {
     -V $vcf \
     -O ${vcf.baseName}.${sample_list.simpleName}.vcf \
     --sample-name ${sample_list}  \
+    --restrictAllelesTo BIALLELIC \
+    --selectTypeToInclude SNP \
     --java-options '-DGATK_STACKTRACE_ON_USER_EXCEPTION=true'
 
     bgzip -c ${vcf.baseName}.${sample_list.simpleName}.vcf > ${vcf.baseName}.${sample_list.simpleName}.vcf.gz
@@ -82,7 +84,7 @@ ch_grouped_pop_vcfs = ch_pops_vcfs.groupTuple(by: 0)
 process GatherVcfs {
 
     tag "${pop_name}"
-    publishDir "${params.outdir}/${pop_name}/subsampled_multisample_vcf/", mode: 'copy'
+    publishDir "${params.outdir}/populations/${pop_name}/subsampled_multisample_vcf/", mode: 'copy'
     container 'broadinstitute/gatk:latest'
 
     input:
@@ -141,3 +143,35 @@ process PlinkFilterAndFreqCount {
     rm *.vcf.gz
     """
     }
+
+
+// process FreqCounts2Ref {
+
+//     tag "${pop_name}"
+//     publishDir "${params.outdir}/FreqCounts2Ref/", mode: 'copy'
+//     container ' R with data.table '
+
+//     input:
+//     set value("${pop_name}"), file("${pop_name}_chr_pos_id.csv"), ("${pop_name}.frq.counts") from ch_plink_frq_counts 
+
+//     output:
+//     file("*") into ch_freq_dataframes
+
+//     script:
+//     """
+//     #!/usr/bin/env Rscript
+
+//     library(data.table)
+    
+//     # chr pos rs
+//     snp_metadata           <- data.table::fread("${pop_name}_chr_pos_id.csv")
+//     colnames(snp_metadata) <- c("chr", "pos", "rs")
+
+//     # ref panel:  chr,rs,gpos,pos,a1,a2 
+//     # CHR,SNP,A1,A2,C1,C2,G0 
+//     frq_counts           <- data.table::fread("${pop_name}.frq.counts")
+//     colnames(frq_counts) <- c("chr","rs","a1","a2", "c1","c2","gpos" )
+
+    
+//     """
+//     }
