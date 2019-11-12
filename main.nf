@@ -46,7 +46,7 @@ ch_multiVCF = ch_subset_lists_view.combine(ch_multiVCF_table)
 process SubsetMultiVCF {
 
     tag {"${sample_list.simpleName}-${vcf.baseName}"}
-    container 'broadinstitute/gatk:latest'
+    container 'broadinstitute/gatk:4.1.3.0'
     publishDir "${params.outdir}/populations/${sample_list.simpleName}/individual_chr_vcfs/", mode: 'copy'
 
     input:
@@ -63,12 +63,12 @@ process SubsetMultiVCF {
     gatk SelectVariants \
     -R ${fasta} \
     -V $vcf \
-    -O ${vcf.baseName}.${sample_list.simpleName}.vcf \
+    -O with_rsID.vcf \
     --sample-name ${sample_list}  \
-    --restrictAllelesTo BIALLELIC \
-    --selectTypeToInclude SNP \
+    --restrict-alleles-to BIALLELIC \
+    --select-type-to-include SNP \
     --java-options '-DGATK_STACKTRACE_ON_USER_EXCEPTION=true'
-
+    
     bgzip -c ${vcf.baseName}.${sample_list.simpleName}.vcf > ${vcf.baseName}.${sample_list.simpleName}.vcf.gz
    """
 }
