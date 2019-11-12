@@ -43,7 +43,7 @@ Channel.fromPath("${params.list_folder}/*.list")
 // Create ch with [pop.list, vcf, vcf_index]
 ch_multiVCF = ch_subset_lists_view.combine(ch_multiVCF_table)
 
-process SubsetMultiVCF {
+process SubsetPopVCF {
 
     tag {"${sample_list.simpleName}-${vcf.baseName}"}
     container 'broadinstitute/gatk:4.1.3.0'
@@ -57,32 +57,53 @@ process SubsetMultiVCF {
     each file(dict) from ch_dict
 
     output:
-    set val("${sample_list.simpleName}"), file("${vcf.baseName}.${sample_list.simpleName}.vcf.gz") into (ch_pops_vcfs, ch_pops_vcfs_to_inspect)
+    set val("${sample_list.simpleName}"), file("${vcf.baseName}.${sample_list.simpleName}.vcf") into (ch_pops_vcfs_to_bcftools, ch_pops_vcfs_to_bcftools_to_inspect)
 
     script:
     """
     gatk SelectVariants \
     -R ${fasta} \
     -V $vcf \
-    -O with_rsID.vcf \
+    -O ${vcf.baseName}.${sample_list.simpleName}.vcf \
     --sample-name ${sample_list}  \
     --restrict-alleles-to BIALLELIC \
     --select-type-to-include SNP \
     --verbosity ERROR 2> stderr.txt
+    """
+}
 
+println('Inspecting ch_pops_vcfs_to_bcftools_to_inspect: (should have [pop_name, vcf])')
+ch_pops_vcfs_to_bcftools_to_inspect.view()
+
+process RecodeID {
+
+    tag {"${pop_name}-${vcf.baseName}"}
+    container 'vandhanak/bcftools:1.3.1'
+    echo true 
+
+    input:
+    set val(pop_name), file(vcf) from ch_pops_vcfs_to_bcftools
+
+    output:
+    set val("${pop_name}"), file("${vcf.baseName}.${pop_name}.vcf.gz") into (ch_pops_vcfs, ch_pops_vcfs_to_inspect)
+
+    script:
+    """
     # Recode ID to: chr:pos:ref:alt
-    bcftools annotate -x ID iberian.vcf | bcftools annotate --set-id +'%CHROM:%POS:%REF:%FIRST_ALT' > ${vcf.baseName}.${sample_list.simpleName}.vcf
+    bcftools annotate -x ID $vcf | bcftools annotate --set-id +'%CHROM:%POS:%REF:%FIRST_ALT' > ${vcf.baseName}.${pop_name}.vcf
 
-    bgzip -c ${vcf.baseName}.${sample_list.simpleName}.vcf > ${vcf.baseName}.${sample_list.simpleName}.vcf.gz
+    bgzip -c ${vcf.baseName}.${pop_name}.vcf > ${vcf.baseName}.${pop_name}.vcf.gz
    """
 }
 
+println('Inspecting ch_pops_vcfs_to_inspect: (should have [pop_name, [vcf1, vcf2, vcf3]])')
 ch_pops_vcfs_to_inspect
                         .groupTuple(by: 0)
                         //.map {pop_name, subsetted_vcf -> subsetted_vcf}
                         .view()
 
 ch_grouped_pop_vcfs = ch_pops_vcfs.groupTuple(by: 0)
+
 
 
 process GatherVcfs {
@@ -111,7 +132,7 @@ process GatherVcfs {
     echo \$vcf >> ${pop_name}.vcf.list
     done
 
-    gatk GatherVcfs \
+    gatk GatherVCFs \
     --INPUT  ${pop_name}.vcf.list \
     --OUTPUT ${pop_name}.vcf.gz
     """
@@ -119,7 +140,7 @@ process GatherVcfs {
 
 ch_plink_count_freqs_to_inspect.view()
 
-process PlinkFilterAndFreqCount {
+process GetFreqCounts {
 
     tag "${pop_name}"
     publishDir "${params.outdir}/${pop_name}/plink_metrics/", mode: 'copy'
