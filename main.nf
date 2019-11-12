@@ -106,7 +106,7 @@ ch_grouped_pop_vcfs = ch_pops_vcfs.groupTuple(by: 0)
 
 
 
-process GatherVcfs {
+process GatherVCFs {
 
     tag "${pop_name}"
     publishDir "${params.outdir}/populations/${pop_name}/subsampled_multisample_vcf/", mode: 'copy'
@@ -132,7 +132,7 @@ process GatherVcfs {
     echo \$vcf >> ${pop_name}.vcf.list
     done
 
-    gatk GatherVCFs \
+    gatk GatherVcfs \
     --INPUT  ${pop_name}.vcf.list \
     --OUTPUT ${pop_name}.vcf.gz
     """
