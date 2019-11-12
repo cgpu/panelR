@@ -140,7 +140,7 @@ process GatherVCFs {
 
 ch_plink_count_freqs_to_inspect.view()
 
-process GetFreqCounts {
+process GetFrqCounts {
 
     tag "${pop_name}"
     publishDir "${params.outdir}/${pop_name}/plink_metrics/", mode: 'copy'
