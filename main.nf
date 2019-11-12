@@ -70,9 +70,9 @@ process SubsetMultiVCF {
     --verbosity ERROR > stderr.txt
 
     # Recode ID to: chr:pos:ref:alt
-    bcftools annotate -x ID iberian.vcf | bcftools annotate --set-id +'%CHROM:%POS:%REF:%FIRST_ALT' > ${vcf.baseName}.${sample_list.simpleName}.vcf
+    #bcftools annotate -x ID iberian.vcf | bcftools annotate --set-id +'%CHROM:%POS:%REF:%FIRST_ALT' > ${vcf.baseName}.${sample_list.simpleName}.vcf
 
-    bgzip -c ${vcf.baseName}.${sample_list.simpleName}.vcf > ${vcf.baseName}.${sample_list.simpleName}.vcf.gz
+    #bgzip -c ${vcf.baseName}.${sample_list.simpleName}.vcf > ${vcf.baseName}.${sample_list.simpleName}.vcf.gz
    """
 }
 
