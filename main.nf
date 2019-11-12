@@ -66,7 +66,8 @@ process SubsetMultiVCF {
     -O with_rsID.vcf \
     --sample-name ${sample_list}  \
     --restrict-alleles-to BIALLELIC \
-    --select-type-to-include SNP
+    --select-type-to-include SNP \
+    --verbosity ERROR
 
     # Recode ID to: chr:pos:ref:alt
     bcftools annotate -x ID iberian.vcf | bcftools annotate --set-id +'%CHROM:%POS:%REF:%FIRST_ALT' > ${vcf.baseName}.${sample_list.simpleName}.vcf
