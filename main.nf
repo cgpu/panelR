@@ -69,6 +69,9 @@ process SubsetMultiVCF {
     --select-type-to-include SNP \
     --java-options '-DGATK_STACKTRACE_ON_USER_EXCEPTION=true'
     
+    # Recode ID to: chr:pos:ref:alt
+    bcftools annotate -x ID iberian.vcf | bcftools annotate --set-id +'%CHROM:%POS:%REF:%FIRST_ALT' > ${vcf.baseName}.${sample_list.simpleName}.vcf
+
     bgzip -c ${vcf.baseName}.${sample_list.simpleName}.vcf > ${vcf.baseName}.${sample_list.simpleName}.vcf.gz
    """
 }
