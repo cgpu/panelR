@@ -148,7 +148,8 @@ process GetFrqCounts {
 
     output:
     file("*") into ch_plink_results
-    set val("${pop_name}"), file("${pop_name}.frq.counts") into (ch_plink_frq_counts_for_panel , ch_plink_frq_counts_pop_tables)
+    set val("${pop_name}"), file("${pop_name}.frq.counts") into  ch_plink_frq_counts_pop_tables
+    file("${pop_name}.frq.counts") into ch_plink_frq_counts_for_panel
 
     script:
     """
@@ -170,14 +171,14 @@ ch_panel_base = ch_plink_frq_counts_for_panel.take( 1 )
 
 process GetPanelBase {
 
-    tag "${pop_name}"
+    tag "panel template"
     publishDir "${params.outdir}/FreqCountsDataframes/", mode: 'copy'
 
     input:
-    set val(pop_name), file(frq_counts) from ch_panel_base
+    file(frq_counts) from ch_panel_base
 
     output:
-    set val("${pop_name}"), file("{$pop_name}.panel.csv") into ch_panel_base_dataframe
+    file("template.panel.csv") into ch_panel_base_dataframe
 
     script:
     """
@@ -186,7 +187,8 @@ process GetPanelBase {
     library(data.table)
     data.table::setDTthreads(${task.cpus})
 
-    frq_counts           <- data.table::fread($frq_counts)
+    frq_file <- list.files(getwd(), full.names = TRUE, pattern = ".frq.counts")
+    frq_counts           <- data.table::fread(frq_file)
     colnames(frq_counts) <- c("chr","rs","a1","a2", "c1","c2","gpos" )
     
     # Extract pos from rs column
@@ -194,14 +196,14 @@ process GetPanelBase {
     frq_counts <- frq_counts[,c("chr", "rs", "gpos", "pos", "a1", "a2")]
 
     # Write file in .panel.csv
-    data.table::fwrite(frq_counts, file = paste0($pop_name, ".panel.csv"), sep = ",", col.names = TRUE)
+    data.table::fwrite(frq_counts, file = paste0("template.panel.csv"), sep = ",", col.names = TRUE)
     """
     }
 
 process MakePopTables {
 
     tag "${pop_name}"
-    publishDir "${params.outdir}/FreqCountsDataframes/", mode: 'copy'
+    publishDir "${params.outdir}/PopTables/", mode: 'copy'
 
     input:
     set val(pop_name), file(frq_counts) from ch_plink_frq_counts_pop_tables
@@ -216,24 +218,25 @@ process MakePopTables {
     library(data.table)
     data.table::setDTthreads(${task.cpus})
 
-    frq_counts           <- data.table::fread($frq_counts)
+    frq_file <- list.files(getwd(), full.names = TRUE, pattern = ".frq.counts")
+    frq_counts           <- data.table::fread(frq_file)
     colnames(frq_counts) <- c("chr","rs","a1","a2", "c1","c2","gpos" )
 
     # Extract pos from rs column
     frq_counts\$pos <- stringr::str_split_fixed(frq_counts[["rs"]], ":", n = Inf)[,2]
     frq_counts      <- frq_counts[,c("chr", "rs", "gpos", "pos", "a1", "a2")]
-    frq_counts\$pop <- paste0(frq_counts$c1, ",",  frq_counts$c2)
+    frq_counts\$pop <- paste0(frq_counts\$c1, ",",  frq_counts\$c2)
     pop_table       <- frq_counts [, c("rs", "pop")]
-    colnames(pop_table) <- c("rs", $pop_name)
+    colnames(pop_table) <- c("rs", "${pop_name}")
 
     # Write file in .pop.csv
-    data.table::fwrite(pop_table, file = paste0($pop_name, ".pop.csv"), sep = ",", col.names = TRUE)
+    data.table::fwrite(pop_table, file = paste0("${pop_name}", ".pop.csv"), sep = ",", col.names = TRUE)
     """
     }
 
 process JoinPanel {
 
-    tag "${pop_name}"
+    tag "Joining panel"
     publishDir "${params.outdir}/RefPanel/", mode: 'copy'
 
     input:
@@ -250,20 +253,23 @@ process JoinPanel {
     library(data.table)
     data.table::setDTthreads(${task.cpus})
 
+    panel_csv_path   <- list.files(getwd(), full.names = TRUE, pattern = ".panel.csv")
+
     # Collect all the .csv files that match the pattern ".pop.csv" (engineered so in previous process mua ha)
-    frq_files <- list.files(getwd(), full.names = TRUE, pattern = ".pop.csv")
+    all_pop_csv_paths <- list.files(getwd(), full.names = TRUE, pattern = ".pop.csv")
+    all_csv_paths <- c(panel_csv_path, all_pop_csv_paths)
+
+    all_csv <- lapply(all_csv_paths, data.table::fread)
 
     # (Redundant but I <3 this)
     # Collect all the names of the .csv files that match the pattern ".pop.csv"
-    names(all_csv) <- gsub(".csv","",
-                    list.files(getwd(),full.names = FALSE, pattern = ".pop.csv"),
-                    fixed = TRUE)
-    
+    names(all_csv) <- gsub(".csv","", basename(all_csv_paths), fixed = TRUE)
+
     # Now all the data.tables are in a lists already - how convenient! Just in time for plyr::join()
-    panel <- Reduce(function(dtf1, dtf2) plyr::join(dtf1, dtf2, by = "rs", type = "inner"),
-                    list($panel_csv, all_csv))
+    panel <- Reduce(function(dtf1, dtf2) plyr::join(dtf1, dtf2, by = "rs", type = "inner"), all_csv)
 
     # Write file in ref.panel.txt
-    data.table::fwrite(pop_table, file = paste0($pop_name, ".pop.csv"), sep = ",", col.names = TRUE)
+    data.table::fwrite(panel, file = paste0("refpanel_", length(all_pop_csv_paths), "pops.txt"), sep = ",", col.names = TRUE)
+
     """
     }
