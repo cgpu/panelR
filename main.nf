@@ -200,7 +200,7 @@ process GetPanelBase {
     """
     }
 
-process MakePopTables {
+process GetPopTables {
 
     tag "${pop_name}"
     publishDir "${params.outdir}/PopTables/", mode: 'copy'
@@ -224,7 +224,6 @@ process MakePopTables {
 
     # Extract pos from rs column
     frq_counts\$pos <- stringr::str_split_fixed(frq_counts[["rs"]], ":", n = Inf)[,2]
-    frq_counts      <- frq_counts[,c("chr", "rs", "gpos", "pos", "a1", "a2")]
     frq_counts\$pop <- paste0(frq_counts\$c1, ",",  frq_counts\$c2)
     pop_table       <- frq_counts [, c("rs", "pop")]
     colnames(pop_table) <- c("rs", "${pop_name}")
@@ -269,7 +268,7 @@ process JoinPanel {
     panel <- Reduce(function(dtf1, dtf2) plyr::join(dtf1, dtf2, by = "rs", type = "inner"), all_csv)
 
     # Write file in ref.panel.txt
-    data.table::fwrite(panel, file = paste0("refpanel_", length(all_pop_csv_paths), "pops.txt"), sep = ",", col.names = TRUE)
+    data.table::fwrite(panel, file = paste0("refpanel_", length(all_pop_csv_paths), "pops.txt"), sep = " ", col.names = TRUE)
 
     """
     }
