@@ -46,7 +46,6 @@ ch_multiVCF = ch_subset_lists_view.combine(ch_multiVCF_table)
 process SubsetPopVCF {
 
     tag {"${sample_list.simpleName}-${vcf.baseName}"}
-    container 'broadinstitute/gatk:4.1.3.0'
     publishDir "${params.outdir}/populations/${sample_list.simpleName}/individual_chr_vcfs/", mode: 'copy'
     echo true 
 
@@ -78,7 +77,6 @@ ch_pops_vcfs_to_bcftools_to_inspect.view()
 process RecodeID {
 
     tag {"${pop_name}-${vcf.baseName}"}
-    container 'vandhanak/bcftools:1.3.1'
     echo true 
 
     input:
@@ -110,7 +108,6 @@ process GatherVCFs {
 
     tag "${pop_name}"
     publishDir "${params.outdir}/populations/${pop_name}/subsampled_multisample_vcf/", mode: 'copy'
-    container 'broadinstitute/gatk:latest'
 
     input:
     set val(pop_name), file (vcf_bundle) from ch_grouped_pop_vcfs
@@ -140,19 +137,18 @@ process GatherVCFs {
 
 ch_plink_count_freqs_to_inspect.view()
 
+
 process GetFrqCounts {
 
     tag "${pop_name}"
     publishDir "${params.outdir}/${pop_name}/plink_metrics/", mode: 'copy'
-    container 'alliecreason/plink:1.90'
 
     input:
     set val(pop_name), file(all_chr_vcf) from ch_plink_count_freqs
 
     output:
     file("*") into ch_plink_results
-    file("${pop_name}.frq.counts") into ch_plink_frq_counts
-
+    set val("${pop_name}"), file("${pop_name}.frq.counts") into (ch_plink_frq_counts_for_panel , ch_plink_frq_counts_pop_tables)
 
     script:
     """
@@ -169,34 +165,105 @@ process GetFrqCounts {
     """
     }
 
+// Take one of the files
+ch_panel_base = ch_plink_frq_counts_for_panel.take( 1 )
 
-// process FreqCounts2Ref {
+process GetPanelBase {
 
-//     tag "${pop_name}"
-//     publishDir "${params.outdir}/FreqCounts2Ref/", mode: 'copy'
-//     container ' R with data.table '
+    tag "${pop_name}"
+    publishDir "${params.outdir}/FreqCountsDataframes/", mode: 'copy'
 
-//     input:
-//     set value("${pop_name}"), file("${pop_name}_chr_pos_id.csv"), ("${pop_name}.frq.counts") from ch_plink_frq_counts 
+    input:
+    set val(pop_name), file(frq_counts) from ch_panel_base
 
-//     output:
-//     file("*") into ch_freq_dataframes
+    output:
+    set val("${pop_name}"), file("{$pop_name}.panel.csv") into ch_panel_base_dataframe
 
-//     script:
-//     """
-//     #!/usr/bin/env Rscript
+    script:
+    """
+    #!/usr/bin/env Rscript
 
-//     library(data.table)
+    library(data.table)
+    data.table::setDTthreads(${task.cpus})
+
+    frq_counts           <- data.table::fread($frq_counts)
+    colnames(frq_counts) <- c("chr","rs","a1","a2", "c1","c2","gpos" )
     
-//     # chr pos rs
-//     snp_metadata           <- data.table::fread("${pop_name}_chr_pos_id.csv")
-//     colnames(snp_metadata) <- c("chr", "pos", "rs")
+    # Extract pos from rs column
+    frq_counts\$pos <- stringr::str_split_fixed(frq_counts[["rs"]], ":", n = Inf)[,2]
+    frq_counts <- frq_counts[,c("chr", "rs", "gpos", "pos", "a1", "a2")]
 
-//     # ref panel:  chr,rs,gpos,pos,a1,a2 
-//     # CHR,SNP,A1,A2,C1,C2,G0 
-//     frq_counts           <- data.table::fread("${pop_name}.frq.counts")
-//     colnames(frq_counts) <- c("chr","rs","a1","a2", "c1","c2","gpos" )
+    # Write file in .panel.csv
+    data.table::fwrite(frq_counts, file = paste0($pop_name, ".panel.csv"), sep = ",", col.names = TRUE)
+    """
+    }
 
+process MakePopTables {
+
+    tag "${pop_name}"
+    publishDir "${params.outdir}/FreqCountsDataframes/", mode: 'copy'
+
+    input:
+    set val(pop_name), file(frq_counts) from ch_plink_frq_counts_pop_tables
+
+    output:
+    file("${pop_name}.pop.csv") into ch_pop_dataframes_for_panel
+
+    script:
+    """
+    #!/usr/bin/env Rscript
+
+    library(data.table)
+    data.table::setDTthreads(${task.cpus})
+
+    frq_counts           <- data.table::fread($frq_counts)
+    colnames(frq_counts) <- c("chr","rs","a1","a2", "c1","c2","gpos" )
+
+    # Extract pos from rs column
+    frq_counts\$pos <- stringr::str_split_fixed(frq_counts[["rs"]], ":", n = Inf)[,2]
+    frq_counts      <- frq_counts[,c("chr", "rs", "gpos", "pos", "a1", "a2")]
+    frq_counts\$pop <- paste0(frq_counts$c1, ",",  frq_counts$c2)
+    pop_table       <- frq_counts [, c("rs", "pop")]
+    colnames(pop_table) <- c("rs", $pop_name)
+
+    # Write file in .pop.csv
+    data.table::fwrite(pop_table, file = paste0($pop_name, ".pop.csv"), sep = ",", col.names = TRUE)
+    """
+    }
+
+process JoinPanel {
+
+    tag "${pop_name}"
+    publishDir "${params.outdir}/RefPanel/", mode: 'copy'
+
+    input:
+    file(panel_csv) from ch_panel_base_dataframe
+    file(pop_csv)   from ch_pop_dataframes_for_panel.collect()
+
+    output:
+    file("*") into ch_freq_dataframes
+
+    script:
+    """
+    #!/usr/bin/env Rscript
+
+    library(data.table)
+    data.table::setDTthreads(${task.cpus})
+
+    # Collect all the .csv files that match the pattern ".pop.csv" (engineered so in previous process mua ha)
+    frq_files <- list.files(getwd(), full.names = TRUE, pattern = ".pop.csv")
+
+    # (Redundant but I <3 this)
+    # Collect all the names of the .csv files that match the pattern ".pop.csv"
+    names(all_csv) <- gsub(".csv","",
+                    list.files(getwd(),full.names = FALSE, pattern = ".pop.csv"),
+                    fixed = TRUE)
     
-//     """
-//     }
+    # Now all the data.tables are in a lists already - how convenient! Just in time for plyr::join()
+    panel <- Reduce(function(dtf1, dtf2) plyr::join(dtf1, dtf2, by = "rs", type = "inner"),
+                    list($panel_csv, all_csv))
+
+    # Write file in ref.panel.txt
+    data.table::fwrite(pop_table, file = paste0($pop_name, ".pop.csv"), sep = ",", col.names = TRUE)
+    """
+    }
