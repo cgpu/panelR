@@ -116,7 +116,6 @@ process GatherVCFs {
     each file(dict) from ch_dict_gather
 
     output:
-    file("*") into ch_complete_chr_vcf
     set val("${pop_name}"), file("${pop_name}.vcf.gz") into (ch_plink_count_freqs, ch_plink_count_freqs_to_inspect)
 
 
@@ -126,8 +125,13 @@ process GatherVCFs {
 
     ## make list of input variant files
     for vcf in \$(ls *vcf.gz); do
-    echo \$vcf >> ${pop_name}.vcf.list
+    echo \$vcf >> temp.vcf.list
     done
+
+    ## Sorting else GATK complains (see error message below)
+    ## "There was a problem with gathering the INPUT.java.lang.IllegalArgumentException:
+    ## First record in file chr2.vcf.gz is not after first record in previous file chr19.vcf.gz"
+    cat temp.vcf.list | sort -V > ${pop_name}.vcf.list
 
     gatk GatherVcfs \
     --INPUT  ${pop_name}.vcf.list \
@@ -147,7 +151,6 @@ process GetFrqCounts {
     set val(pop_name), file(all_chr_vcf) from ch_plink_count_freqs
 
     output:
-    file("*") into ch_plink_results
     set val("${pop_name}"), file("${pop_name}.frq.counts") into  ch_plink_frq_counts_pop_tables
     file("${pop_name}.frq.counts") into ch_plink_frq_counts_for_panel
 
