@@ -11,17 +11,17 @@ threadmem = (((Runtime.getRuntime().maxMemory() * 4) / threads) as nextflow.util
 // fasta
 Channel.fromPath(params.fasta)
         .ifEmpty { exit 1, "fasta annotation file not found: ${params.fasta}" }
-        .into { ch_fasta ; ch_fasta_gather}
+        .into { ch_fasta ; ch_fasta_gather; ch_fasta_for_filterSNPs}
 
 // fai
 Channel.fromPath(params.fai)
         .ifEmpty { exit 1, "fasta index file not found: ${params.fai}" }
-        .into { ch_fai ; ch_fai_gather }
+        .into { ch_fai ; ch_fai_gather ; ch_fai_for_filterSNPs}
 
 // dict
 Channel.fromPath(params.dict)
         .ifEmpty { exit 1, "dict annotation file not found: ${params.dict}" }
-        .into { ch_dict ; ch_dict_gather }
+        .into { ch_dict ; ch_dict_gather ; ch_dict_for_filterSNPs }
 
 // TODO: Multiply channel arrays by N = number of vcf files (most likely 22, from autosomal chr count)
 // Create ch with [fasta, fai, dict]
@@ -117,7 +117,7 @@ process GatherVCFs {
     each file(dict) from ch_dict_gather
 
     output:
-    set val("${pop_name}"), file("${pop_name}.vcf.gz") into (ch_plink_count_freqs, ch_plink_count_freqs_to_inspect)
+    set val("${pop_name}"), file("${pop_name}.vcf") into (ch_plink_create_white_list, ch_plink_count_freqs_to_inspect)
 
 
     script:
@@ -137,11 +137,75 @@ process GatherVCFs {
     gatk GatherVcfs \
     --INPUT  ${pop_name}.vcf.list \
     --OUTPUT ${pop_name}.vcf.gz
+
+    gunzip ${pop_name}.vcf.gz
     """
     }
 
 ch_plink_count_freqs_to_inspect.view()
 
+process CreateSNPWhiteList {
+
+    tag "${pop_name}"
+    publishDir "${params.outdir}/${pop_name}/plink_SNP_whitelist/", mode: 'copy'
+    echo true
+
+    input:
+    set val(pop_name), file(all_chr_vcf) from ch_plink_create_white_list
+
+    output:
+    set val("${pop_name}"), file("${all_chr_vcf.simpleName}.SNPwhite.list"), file("${all_chr_vcf.simpleName}.vcf") into  ch_whitelist_for_keepIDs
+
+    script:
+    """
+    plink \
+    --noweb \
+    --vcf $all_chr_vcf \
+    --no-sex \
+    --maf 0.1 \
+    --geno 0.5 \
+    --recode \
+    --allow-extra-chr \
+    --r2 \
+    --ld-window-kb 1 \
+    --ld-window 1000 \
+    --ld-window-r2 0 \
+    --out ${all_chr_vcf.simpleName}
+
+    awk '{ print \$2 }' "${all_chr_vcf.simpleName}.map"  > "${all_chr_vcf.simpleName}.SNPwhite.list"
+    """
+    }
+
+process KeepWhitelistedSNPs {
+
+    tag {"${pop_name}-${vcf.baseName}"}
+    publishDir "${params.outdir}/populations/${pop_name}/individual_chr_vcfs/", mode: 'copy'
+    echo true
+
+    input:
+    set val(pop_name), file(whitelist), file(vcf) from ch_whitelist_for_keepIDs
+    each file(fasta) from ch_fasta_for_filterSNPs
+    each file(fai) from ch_fai_for_filterSNPs
+    each file(dict) from ch_dict_for_filterSNPs
+
+
+    output:
+    set val("${vcf.simpleName}"), file("${vcf.simpleName}.filtered.vcf") into (ch_pruned_for_get_frq_counts, ch_pruned_for_get_frq_counts_to_inspect)
+
+    script:
+    """
+    gatk IndexFeatureFile \
+    -F $vcf && \
+
+    gatk SelectVariants \
+    -R hs37d5.fa \
+    -V $vcf \
+    -O ${vcf.simpleName}.filtered.vcf \
+    --keep-ids $whitelist
+    """
+}
+
+ch_pruned_for_get_frq_counts_to_inspect.view()
 
 process GetFrqCounts {
 
@@ -150,7 +214,7 @@ process GetFrqCounts {
     echo true
 
     input:
-    set val(pop_name), file(all_chr_vcf) from ch_plink_count_freqs
+    set val(pop_name), file(all_chr_vcf) from ch_pruned_for_get_frq_counts
 
     output:
     set val("${pop_name}"), file("${pop_name}.frq.counts") into  ch_plink_frq_counts_pop_tables
@@ -166,8 +230,6 @@ process GetFrqCounts {
     --maf  0.05 \
     --freq counts \
     --out $pop_name > ${pop_name}_plink.stdout.log
-
-    rm *.vcf.gz
     """
     }
 
