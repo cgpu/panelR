@@ -47,7 +47,7 @@ process SubsetPopVCF {
 
     tag {"${sample_list.simpleName}-${vcf.baseName}"}
     publishDir "${params.outdir}/populations/${sample_list.simpleName}/individual_chr_vcfs/", mode: 'copy'
-    echo true
+
 
     input:
     set file(sample_list), file(vcf), file(vcf_index) from ch_multiVCF
@@ -77,7 +77,7 @@ ch_pops_vcfs_to_bcftools_to_inspect.view()
 process RecodeID {
 
     tag {"${pop_name}-${vcf.baseName}"}
-    echo true
+
 
     input:
     set val(pop_name), file(vcf) from ch_pops_vcfs_to_bcftools
@@ -108,7 +108,7 @@ process GatherVCFs {
 
     tag "${pop_name}"
     publishDir "${params.outdir}/populations/${pop_name}/subsampled_multisample_vcf/", mode: 'copy'
-    echo true
+
 
     input:
     set val(pop_name), file (vcf_bundle) from ch_grouped_pop_vcfs
@@ -148,7 +148,7 @@ process CreateSNPWhiteList {
 
     tag "${pop_name}"
     publishDir "${params.outdir}/${pop_name}/plink_SNP_whitelist/", mode: 'copy'
-    echo true
+
 
     input:
     set val(pop_name), file(all_chr_vcf) from ch_plink_create_white_list
@@ -180,7 +180,7 @@ process KeepWhitelistedSNPs {
 
     tag {"${pop_name}-${vcf.baseName}"}
     publishDir "${params.outdir}/populations/${pop_name}/individual_chr_vcfs/", mode: 'copy'
-    echo true
+
 
     input:
     set val(pop_name), file(whitelist), file(vcf) from ch_whitelist_for_keepIDs
@@ -211,7 +211,7 @@ process GetFrqCounts {
 
     tag "${pop_name}"
     publishDir "${params.outdir}/${pop_name}/plink_metrics/", mode: 'copy'
-    echo true
+
 
     input:
     set val(pop_name), file(all_chr_vcf) from ch_pruned_for_get_frq_counts
@@ -240,7 +240,7 @@ process GetPanelBase {
 
     tag "panel template"
     publishDir "${params.outdir}/FreqCountsDataframes/", mode: 'copy'
-    echo true
+
 
     input:
     file(frq_counts) from ch_panel_base
@@ -272,7 +272,7 @@ process GetPopTables {
 
     tag "${pop_name}"
     publishDir "${params.outdir}/PopTables/", mode: 'copy'
-    echo true
+
 
     input:
     set val(pop_name), file(frq_counts) from ch_plink_frq_counts_pop_tables
@@ -306,7 +306,7 @@ process JoinPanel {
 
     tag "Joining panel"
     publishDir "${params.outdir}/RefPanel/", mode: 'copy'
-    echo true
+
 
     input:
     file(panel_csv) from ch_panel_base_dataframe
