@@ -46,7 +46,7 @@ ch_multiVCF = ch_subset_lists_view.combine(ch_multiVCF_table)
 process SubsetPopVCF {
 
     tag {"${sample_list.simpleName}-${vcf.baseName}"}
-    publishDir "${params.outdir}/populations/${sample_list.simpleName}/individual_chr_vcfs/", mode: 'copy'
+    //publishDir "${params.outdir}/populations/${sample_list.simpleName}/individual_chr_vcfs/", mode: 'copy'
 
 
     input:
@@ -107,7 +107,7 @@ ch_grouped_pop_vcfs = ch_pops_vcfs.groupTuple(by: 0)
 process GatherVCFs {
 
     tag "${pop_name}"
-    publishDir "${params.outdir}/populations/${pop_name}/subsampled_multisample_vcf/", mode: 'copy'
+    //publishDir "${params.outdir}/populations/${pop_name}/subsampled_multisample_vcf/", mode: 'copy'
 
 
     input:
@@ -147,7 +147,7 @@ ch_plink_count_freqs_to_inspect.view()
 process CreateSNPWhiteList {
 
     tag "${pop_name}"
-    publishDir "${params.outdir}/${pop_name}/plink_SNP_whitelist/", mode: 'copy'
+    //publishDir "${params.outdir}/${pop_name}/plink_SNP_whitelist/", mode: 'copy'
 
 
     input:
@@ -179,7 +179,7 @@ process CreateSNPWhiteList {
 process KeepWhitelistedSNPs {
 
     tag {"${pop_name}-${vcf.baseName}"}
-    publishDir "${params.outdir}/populations/${pop_name}/individual_chr_vcfs/", mode: 'copy'
+    //publishDir "${params.outdir}/populations/${pop_name}/individual_chr_vcfs/", mode: 'copy'
 
 
     input:
@@ -210,7 +210,7 @@ ch_pruned_for_get_frq_counts_to_inspect.view()
 process GetFrqCounts {
 
     tag "${pop_name}"
-    publishDir "${params.outdir}/${pop_name}/plink_metrics/", mode: 'copy'
+    //publishDir "${params.outdir}/${pop_name}/plink_metrics/", mode: 'copy'
 
 
     input:
@@ -239,7 +239,7 @@ ch_panel_base = ch_plink_frq_counts_for_panel.take( 1 )
 process GetPanelBase {
 
     tag "panel template"
-    publishDir "${params.outdir}/FreqCountsDataframes/", mode: 'copy'
+    //publishDir "${params.outdir}/FreqCountsDataframes/", mode: 'copy'
 
 
     input:
